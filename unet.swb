@@ -1,0 +1,21 @@
+#!/bin/bash
+
+#SBATCH --job-name="train"
+#SBATCH --output="slurm_logs/train.%j.out"
+#SBATCH --error="slurm_logs/train.%j.err"
+#SBATCH --mem=32g
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=16
+#SBATCH --partition=a100      # <- or one of: a100 sandy
+#SBATCH --account=bbym-hydro
+#SBATCH --time=48:00:00
+##SBATCH --gpus-per-node=1
+##SBATCH --gpu-bind=closest
+
+
+nvidia-smi
+source ~/.bashrc
+export WANDB_API_KEY=6503c82b63d216d89775a9c56d0a24fb8fd19580
+python train.py
+
