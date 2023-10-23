@@ -113,7 +113,7 @@ class OutConv(nn.Module):
         return self.conv(x)
     
 
-    
+ 
 class UNet(nn.Module):
     def __init__(self, n_channels, n_classes, bilinear=False):
         super(UNet, self).__init__()
@@ -187,12 +187,13 @@ class UNet2Branch(nn.Module):
 
         # decoder
         # self.up1 = (Fuse_Up(1024*2, 512 // factor, bilinear,fuse_channel = 512))
-
-        self.up1 = (Up(1024 * 2, 512 // factor * 2, bilinear))
-        self.up2 = (Up(512 * 2, 256 // factor * 2, bilinear))
-        self.up3 = (Up(256 * 2, 128 // factor * 2, bilinear))
-        self.up4 = (Up(128 * 2, 64 * 2, bilinear))
-        self.outc = (OutConv(64 * 2, n_classes))
+        
+        self.fuseconv = DoubleConv(1024 * 2, 1024)
+        self.up1 = (Up(1024, 512 // factor, bilinear))
+        self.up2 = (Up(512, 256 // factor, bilinear))
+        self.up3 = (Up(256, 128 // factor, bilinear))
+        self.up4 = (Up(128, 64, bilinear))
+        self.outc = (OutConv(64, n_classes))
 
     def forward(self, map, legend):
         # x = torch.cat((map, legend),axis=1)
@@ -211,15 +212,16 @@ class UNet2Branch(nn.Module):
         legend5 = self.downl4(legend4)
 
         fused5 = torch.cat((map5,legend5),axis=1)
-        fused4 = torch.cat((map4,legend4),axis=1)
-        fused3 = torch.cat((map3,legend3),axis=1)
-        fused2 = torch.cat((map2,legend2),axis=1)
-        fused1 = torch.cat((map1,legend1),axis=1)
-        
-        x = self.up1(fused5, fused4)
-        x = self.up2(x, fused3)
-        x = self.up3(x, fused2)
-        x = self.up4(x, fused1)
+        # fused4 = torch.cat((map4,legend4),axis=1)
+        # fused3 = torch.cat((map3,legend3),axis=1)
+        # fused2 = torch.cat((map2,legend2),axis=1)
+        # fused1 = torch.cat((map1,legend1),axis=1)
+        fused5 = self.fuseconv(fused5)
+
+        x = self.up1(fused5, map4)
+        x = self.up2(x, map3)
+        x = self.up3(x, map2)
+        x = self.up4(x, map1)
         logits = self.outc(x)
         # logits = torch.argmax(logits, dim=1)
         # print(logits.size())

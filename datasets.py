@@ -111,8 +111,10 @@ class MAPData(data.Dataset):
         legend_img = self.data_transforms(legend_img)# .unsqueeze(0)
         
     
-        
-
+        if index == 0:
+            print("debug in data loader")
+            print("train:", self.train)
+            print(map_img.size(),legend_img.size(),seg_img.size())
         return {
             "map_img": map_img,    # 3 H W
             "legend_img": legend_img, # 1 3 H W - > 3 H W 
