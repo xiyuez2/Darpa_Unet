@@ -17,5 +17,5 @@
 nvidia-smi
 source ~/.bashrc
 export WANDB_API_KEY=6503c82b63d216d89775a9c56d0a24fb8fd19580
-python train.py --model Unet2B
+python train.py --model Unet2B 
 

@@ -46,9 +46,11 @@ class MAPData(data.Dataset):
         legend_img: legend image (3,resize_size,resize_size)
         seg_img: segmentation image (3,resize_size,resize_size)
     '''
-    def __init__(self, data_path=training_path,type="poly",range=None,resize_size = 256 , train = True):
+    def __init__(self, data_path=training_path,type="poly",range=None,resize_size = 256 , train = True, filp_rate = 0, color_jitter_rate = 0):
         self.resize_size = resize_size
         self.train = train
+        self.filp_rate = filp_rate
+        self.color_jitter_rate = color_jitter_rate
         # if train:
         self.data_transforms = transforms.Compose([
         transforms.Resize((resize_size, resize_size)),
@@ -90,11 +92,27 @@ class MAPData(data.Dataset):
         seg_img = seg_img > 0.5
         seg_img = seg_img.type(torch.int64)
         # seg_img = seg_img.type(torch.float)
+        if self.train and random.random() < self.color_jitter_rate:
+            hue_factor = float(torch.empty(1).uniform_(-0.5, 0.5))
+            map_img = F.adjust_hue(map_img, hue_factor)
+            legend_img = F.adjust_hue(legend_img, hue_factor)
+
+        if self.train and random.random() < self.filp_rate:
+            map_img = map_img[:,:,::-1]
+            legend_img = legend_img[:,:,::-1]
+            seg_img = seg_img[:,:,:,::-1]
+
+        if self.train and random.random() < self.filp_rate:
+            map_img = map_img[:,::-1,:]
+            legend_img = legend_img[:,::-1,:]
+            seg_img = seg_img[:,:,::-1,:]
 
         map_img = self.data_transforms(map_img)
         legend_img = self.data_transforms(legend_img)# .unsqueeze(0)
-
+        
     
+        
+
         return {
             "map_img": map_img,    # 3 H W
             "legend_img": legend_img, # 1 3 H W - > 3 H W 
