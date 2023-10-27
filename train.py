@@ -42,9 +42,9 @@ parser.add_argument('--scheduler', type=str, default='reducelr')
 # parser.add_argument('--crop_image_size', type=int, default=512)
 # parser.add_argument('--ShiftScaleRotateMode', type=int, default=4)
 # parser.add_argument('--ShiftScaleRotate', type=float, default=0.2)
-parser.add_argument('--HorizontalFlip', type=float, default=0.2)
-parser.add_argument('--VerticalFlip', type=float, default=0.2)
-parser.add_argument('--HueJitter', type=float, default=0.2)
+# parser.add_argument('--HorizontalFlip', type=float, default=0.2)
+parser.add_argument('--filp_rate', type=float, default=0.4)
+parser.add_argument('--color_jitter_rate', type=float, default=0.2)
 args = parser.parse_args()
 args = parser.parse_args()
 
@@ -68,7 +68,7 @@ if __name__ == '__main__':
 
         model = SegmentationModel(args)
     
-        train_dataset = MAPData(data_path="/projects/bbym/shared/all_patched_data/training",type="poly",range=(0,30000))
+        train_dataset = MAPData(data_path="/projects/bbym/shared/all_patched_data/training",type="poly",range=(0,30000), filp_rate = args.filp_rate, color_jitter_rate = args.color_jitter_rate)
         val_dataset = MAPData(data_path="/projects/bbym/shared/all_patched_data/validation",type="poly",range=(30000,36000),train=False)
         train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
         val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False,num_workers=args.num_workers)

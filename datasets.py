@@ -13,6 +13,7 @@ import cv2
 import json 
 from itertools import chain
 from patchify import patchify, unpatchify
+import matplotlib.pyplot as plt
 
 training_path = "/media/jiahua/FILE/uiuc/NCSA/processed/training"
 validation_path = "/media/jiahua/FILE/uiuc/NCSA/processed/validation"
@@ -47,6 +48,7 @@ class MAPData(data.Dataset):
         seg_img: segmentation image (3,resize_size,resize_size)
     '''
     def __init__(self, data_path=training_path,type="poly",range=None,resize_size = 256 , train = True, filp_rate = 0, color_jitter_rate = 0):
+        print("augmentation rate:", filp_rate, color_jitter_rate)
         self.resize_size = resize_size
         self.train = train
         self.filp_rate = filp_rate
@@ -94,22 +96,24 @@ class MAPData(data.Dataset):
         # seg_img = seg_img.type(torch.float)
         if self.train and random.random() < self.color_jitter_rate:
             hue_factor = float(torch.empty(1).uniform_(-0.5, 0.5))
-            map_img = F.adjust_hue(map_img, hue_factor)
-            legend_img = F.adjust_hue(legend_img, hue_factor)
-
-        if self.train and random.random() < self.filp_rate:
-            map_img = map_img[:,:,::-1]
-            legend_img = legend_img[:,:,::-1]
-            seg_img = seg_img[:,:,:,::-1]
-
-        if self.train and random.random() < self.filp_rate:
-            map_img = map_img[:,::-1,:]
-            legend_img = legend_img[:,::-1,:]
-            seg_img = seg_img[:,:,::-1,:]
+            map_img = aug_f.adjust_hue(map_img, hue_factor)
+            legend_img = aug_f.adjust_hue(legend_img, hue_factor)
 
         map_img = self.data_transforms(map_img)
         legend_img = self.data_transforms(legend_img)# .unsqueeze(0)
         
+        if self.train and random.random() < self.filp_rate:
+            map_img = torch.flip(map_img, (-1,)) #map_img[:,:,::-1]
+            legend_img = torch.flip(legend_img, (-1,)) #legend_img[:,:,::-1]
+            seg_img = torch.flip(seg_img, (-1,)) #seg_img[:,:,:,::-1]
+
+        if self.train and random.random() < self.filp_rate:
+            # map_img = map_img[:,::-1,:]
+            # legend_img = legend_img[:,::-1,:]
+            # seg_img = seg_img[:,:,::-1,:]
+            map_img = torch.flip(map_img, (-2,)) #map_img[:,:,::-1]
+            legend_img = torch.flip(legend_img, (-2,)) #legend_img[:,:,::-1]
+            seg_img = torch.flip(seg_img, (-2,)) #seg_img[:,:,:,::-1]
     
         if index == 0:
             print("debug in data loader")
@@ -140,10 +144,10 @@ class eval_MAPData(data.Dataset):
         legend_img: legend image (3,resize_size,resize_size)
         seg_img: segmentation image (3,resize_size,resize_size)
     '''
-    def __init__(self, data_path=training_path,type="poly",range=None,resize_size = 256 , mapName = ''):
+    def __init__(self, data_path=training_path,type="poly",range=None,resize_size = 256 , mapName = '', viz = True):
         self.resize_size = resize_size
         self.train = False # train
-
+        self.viz = viz
         self.data_transforms = transforms.Compose([
             transforms.Resize((resize_size, resize_size)),
             transforms.ToTensor(),
@@ -162,7 +166,10 @@ class eval_MAPData(data.Dataset):
         gtPath = data_path + "/../validation_rasters/" + mapName[:-4] #_Xjgb_poly.tif
         
         self.map = cv2.imread(mapPath)
-
+        if self.viz:
+            plt.figure(figsize=(20,20))
+            plt.imshow(self.map)
+            plt.savefig("eval_viz/"+mapName+"_map.png")
         with open(jsonPath, 'r') as f:
             jsonData = json.load(f)
         
@@ -252,6 +259,7 @@ class eval_MAPData(data.Dataset):
         print(shape)
         preds = preds.reshape(len(self.legend_name),self.patch_shape[0],self.patch_shape[1],1,shape[-1],shape[-1],1)
         print(np.shape(preds))
+        final_dice = []
         for i in range(len(preds)):
             cur_legend_name = self.legend_name[i]
             print("for legend:", cur_legend_name)
@@ -266,11 +274,19 @@ class eval_MAPData(data.Dataset):
             union = cur_masked_img.sum() + cur_gt.sum() 
             dice = (2.0 * intersection) / union
             print("dice:", dice)
+            final_dice.append(dice)
             viz_seg = np.repeat(cur_masked_img[:, :, np.newaxis], 3, axis=2).astype(np.uint8)
             viz_gt = np.repeat(cur_gt[:, :, np.newaxis], 3, axis=2).astype(np.uint8)
             cv2.imwrite("eval_viz/"+cur_legend_name+"_pred.tif", viz_seg) 
             cv2.imwrite("eval_viz/"+cur_legend_name+"_gt.tif", viz_gt) 
-
+            if self.viz:
+                plt.figure(figsize=(20,20))
+                plt.imshow(viz_seg[:,:,0])
+                plt.savefig("eval_viz/"+cur_legend_name+"_pred.png")
+                plt.figure(figsize=(20,20))
+                plt.imshow(viz_gt[:,:,0])
+                plt.savefig("eval_viz/"+cur_legend_name+"_gt.png")
+            print("final dice:", np.mean(final_dice))
 
     def __len__(self):
         return len(self.map_patches) * len(self.legend_name)

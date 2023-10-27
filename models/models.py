@@ -8,6 +8,7 @@ import torch.optim.lr_scheduler as lr_scheduler
 from adamp import AdamP
 from torchmetrics.functional import jaccard_index
 import torchvision.models as models
+from .res_unet import Resnet_Unet
 
 def convrelu(in_channels, out_channels, kernel, padding):
     return nn.Sequential(
@@ -255,6 +256,8 @@ class SegmentationModel(pl.LightningModule):
             self.model = UNet(n_channels=6,n_classes=2)
         elif model_name == "Unet2B":
             self.model = UNet2Branch(n_channels=3,n_classes=2)
+        elif model_name == "Resnet":
+            self.model = Resnet_Unet(n_channels=6,n_classes=2)
         else:
             raise NotImplementedError
         self.args = args
@@ -310,19 +313,15 @@ class SegmentationModel(pl.LightningModule):
 
         return {"loss": loss, "jaccard_index_value": jaccard_index_value}
 
-    def test_step(self, test_batch, batch_idx):
-        image, mask = test_batch
+    def test_step(self, val_batch, batch_idx):
+        map_img, legend_img, mask = val_batch["map_img"].cuda(),val_batch["legend_img"].cuda(),val_batch["GT"].cuda()
         mask = mask.long()
 
-        outputs = self.model(image)
-        loss = self.criterion(outputs, mask)
-        jaccard_index_value = jaccard_index(outputs.argmax(dim=1), mask, num_classes=2)
+        outputs = self.model(map_img,legend_img)
+        # loss = self.criterion(outputs, mask)
+        # jaccard_index_value = jaccard_index(outputs.argmax(dim=1), mask, num_classes=2)
 
-        self.log('test/loss', loss, on_epoch=True, on_step=False, prog_bar=True, sync_dist=True)
-        self.log('test/jaccard_index_value', jaccard_index_value, on_epoch=True, on_step=False, prog_bar=True,
-                 sync_dist=True)
-
-        return {"loss": loss, "jaccard_index_value": jaccard_index_value}
+        return outputs[:,-1,] #{"loss": loss, "jaccard_index_value": jaccard_index_value}
     
 
 
