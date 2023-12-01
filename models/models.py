@@ -3,7 +3,6 @@ import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 import torch.optim.lr_scheduler as lr_scheduler
 from adamp import AdamP
 from torchmetrics.functional import jaccard_index
@@ -253,11 +252,11 @@ class SegmentationModel(pl.LightningModule):
         super().__init__()
         model_name = args.model
         if model_name == "Unet":
-            self.model = UNet(n_channels=6,n_classes=2)
+            self.model = UNet(n_channels=7,n_classes=2) # was 6*5 when adding the sin preprocess
         elif model_name == "Unet2B":
-            self.model = UNet2Branch(n_channels=3,n_classes=2)
+            self.model = UNet2Branch(n_channels=7,n_classes=2)
         elif model_name == "Resnet":
-            self.model = Resnet_Unet(n_channels=6,n_classes=2)
+            self.model = Resnet_Unet(n_channels=7,n_classes=2)
         else:
             raise NotImplementedError
         self.args = args

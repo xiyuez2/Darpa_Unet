@@ -14,9 +14,41 @@ import json
 from itertools import chain
 from patchify import patchify, unpatchify
 import matplotlib.pyplot as plt
+import math
 
 training_path = "/media/jiahua/FILE/uiuc/NCSA/processed/training"
 validation_path = "/media/jiahua/FILE/uiuc/NCSA/processed/validation"
+
+def sincolor(image, position):
+    # image is of shape 3 H W
+    pe = position[image.long()] # 3 H W n
+    pe = pe.transpose(1,-1) # 3 n H W
+    pe = pe.flatten(start_dim=0, end_dim=1) # 3n H W 
+    return torch.cat([pe,image],dim = 0) # 3n+3 H W
+
+def canny(image):
+    # image is of shape 3 H W
+    edges = cv2.Canny(image,100,200)
+    return torch.cat([edges,image],dim = 0) # 4 H W
+
+
+def positionalencoding1d(d_model, length):
+    """
+    :param d_model: dimension of the model
+    :param length: length of positions
+    :return: length*d_model position matrix
+    """
+    if d_model % 2 != 0:
+        raise ValueError("Cannot use sin/cos positional encoding with "
+                         "odd dim (got dim={:d})".format(d_model))
+    pe = torch.zeros(length, d_model)
+    position = torch.arange(0, length).unsqueeze(1)
+    div_term = torch.exp((torch.arange(0, d_model, 2, dtype=torch.float) *
+                         -(math.log(10000.0) / d_model)))
+    pe[:, 0::2] = torch.sin(position.float() * div_term)
+    pe[:, 1::2] = torch.cos(position.float() * div_term)
+
+    return pe
 
 def cut_map(image,patch_dims = (256,256),patch_overlap=32):
     # patch parameter
@@ -84,7 +116,8 @@ class MAPData(data.Dataset):
         self.map_path = [os.path.join(self.root,self.type,"map_patches",x) for x in map_path]
         self.legend_path = [os.path.join(self.root,self.type,"legend",x) for x in legend_path]
         self.seg_path = [os.path.join(self.root,self.type,"seg_patches",x) for x in map_path]
-        
+        self.pe = positionalencoding1d(4, 256)
+
     def __getitem__(self, index):
         map_img = Image.open(self.map_path[index])
         legend_img = Image.open(self.legend_path[index])
@@ -94,6 +127,11 @@ class MAPData(data.Dataset):
         seg_img = seg_img > 0.5
         seg_img = seg_img.type(torch.int64)
         # seg_img = seg_img.type(torch.float)
+        # print("debug",np.shape(map_img))
+        edges = cv2.Canny(np.array(map_img),100,200)
+        # print("debug",np.shape(edges))
+        edges = torch.from_numpy(edges).unsqueeze(0) #  1 256 1256
+        
         if self.train and random.random() < self.color_jitter_rate:
             hue_factor = float(torch.empty(1).uniform_(-0.5, 0.5))
             map_img = aug_f.adjust_hue(map_img, hue_factor)
@@ -101,7 +139,9 @@ class MAPData(data.Dataset):
 
         map_img = self.data_transforms(map_img)
         legend_img = self.data_transforms(legend_img)# .unsqueeze(0)
-        
+        map_img = torch.cat([edges,map_img],dim = 0)
+
+
         if self.train and random.random() < self.filp_rate:
             map_img = torch.flip(map_img, (-1,)) #map_img[:,:,::-1]
             legend_img = torch.flip(legend_img, (-1,)) #legend_img[:,:,::-1]
@@ -114,6 +154,9 @@ class MAPData(data.Dataset):
             map_img = torch.flip(map_img, (-2,)) #map_img[:,:,::-1]
             legend_img = torch.flip(legend_img, (-2,)) #legend_img[:,:,::-1]
             seg_img = torch.flip(seg_img, (-2,)) #seg_img[:,:,:,::-1]
+        
+        # map_img = sincolor(map_img,self.pe)
+        # legend_img = sincolor(legend_img,self.pe)
     
         if index == 0:
             print("debug in data loader")
@@ -209,6 +252,7 @@ class eval_MAPData(data.Dataset):
         # print("debug: ", np.shape(legend_gt),np.min(legend_gt),np.max(legend_gt))
 
         # self.w =
+        self.pe = positionalencoding1d(4, 256)
         print("when init dataset:", np.shape(legend_name), np.shape(legend_img), np.shape(legend_gt),np.shape(self.map_patches))
         
 
@@ -239,8 +283,11 @@ class eval_MAPData(data.Dataset):
 
         legend_seg = seg_img.clone()
         legend_seg = legend_seg * 0 + 1
+
+        # map_img = sincolor(map_img,self.pe)
+        # legend_img = sincolor(legend_img,self.pe)
+
         # print("mean of msk",torch.mean(seg_img.type(torch.LongTensor).type(torch.float)))
-        
         # print("debug:", map_img.size(),legend_img.size(),seg_img.size(),legend_seg.size())
         return {
             "map_img": map_img,    # 3 H W
