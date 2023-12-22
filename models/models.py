@@ -8,6 +8,7 @@ from adamp import AdamP
 from torchmetrics.functional import jaccard_index
 import torchvision.models as models
 from .res_unet import Resnet_Unet
+from .vision_transformer import SwinUnet
 
 def convrelu(in_channels, out_channels, kernel, padding):
     return nn.Sequential(
@@ -111,9 +112,7 @@ class OutConv(nn.Module):
 
     def forward(self, x):
         return self.conv(x)
-    
 
- 
 class UNet(nn.Module):
     def __init__(self, n_channels, n_classes, bilinear=False):
         super(UNet, self).__init__()
@@ -161,7 +160,6 @@ class UNet(nn.Module):
         self.up3 = torch.utils.checkpoint(self.up3)
         self.up4 = torch.utils.checkpoint(self.up4)
         self.outc = torch.utils.checkpoint(self.outc)
-
 
 class UNet2Branch(nn.Module):
     def __init__(self, n_channels, n_classes, bilinear=False):
@@ -246,17 +244,23 @@ class UNet2Branch(nn.Module):
         self.up4 = torch.utils.checkpoint(self.up4)
         self.outc = torch.utils.checkpoint(self.outc)
 
-
 class SegmentationModel(pl.LightningModule):
     def __init__(self, args=None):
         super().__init__()
         model_name = args.model
+        if args.edge == False:
+            n_channels = 6
+        else:
+            n_channels = 7
+
         if model_name == "Unet":
-            self.model = UNet(n_channels=7,n_classes=2) # was 6*5 when adding the sin preprocess
+            self.model = UNet(n_channels=n_channels,n_classes=2) # was 6*5 when adding the sin preprocess
         elif model_name == "Unet2B":
-            self.model = UNet2Branch(n_channels=7,n_classes=2)
+            self.model = UNet2Branch(n_channels=n_channels,n_classes=2)
         elif model_name == "Resnet":
-            self.model = Resnet_Unet(n_channels=7,n_classes=2)
+            self.model = Resnet_Unet(n_channels=n_channels,n_classes=2)
+        elif model_name == "swin":
+            self.model = SwinUnet(n_channels=n_channels,n_classes=2)
         else:
             raise NotImplementedError
         self.args = args

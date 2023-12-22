@@ -79,8 +79,9 @@ class MAPData(data.Dataset):
         legend_img: legend image (3,resize_size,resize_size)
         seg_img: segmentation image (3,resize_size,resize_size)
     '''
-    def __init__(self, data_path=training_path,type="poly",range=None,resize_size = 256 , train = True, filp_rate = 0, color_jitter_rate = 0):
+    def __init__(self, data_path=training_path,type="poly",range=None,resize_size = 256 , train = True, filp_rate = 0, color_jitter_rate = 0, edge = False):
         print("augmentation rate:", filp_rate, color_jitter_rate)
+        self.edge = edge
         self.resize_size = resize_size
         self.train = train
         self.filp_rate = filp_rate
@@ -129,7 +130,6 @@ class MAPData(data.Dataset):
         # seg_img = seg_img.type(torch.float)
         # print("debug",np.shape(map_img))
         edges = cv2.Canny(np.array(map_img),100,200)
-        # print("debug",np.shape(edges))
         edges = torch.from_numpy(edges).unsqueeze(0) #  1 256 1256
         
         if self.train and random.random() < self.color_jitter_rate:
@@ -139,7 +139,8 @@ class MAPData(data.Dataset):
 
         map_img = self.data_transforms(map_img)
         legend_img = self.data_transforms(legend_img)# .unsqueeze(0)
-        map_img = torch.cat([edges,map_img],dim = 0)
+        if self.edge:
+            map_img = torch.cat([edges,map_img],dim = 0)
 
 
         if self.train and random.random() < self.filp_rate:
@@ -187,7 +188,8 @@ class eval_MAPData(data.Dataset):
         legend_img: legend image (3,resize_size,resize_size)
         seg_img: segmentation image (3,resize_size,resize_size)
     '''
-    def __init__(self, data_path=training_path,type="poly",range=None,resize_size = 256 , mapName = '', viz = True):
+    def __init__(self, data_path=training_path,type="poly",range=None,resize_size = 256 , mapName = '', viz = True, edge = False):
+        self.edge = edge
         self.resize_size = resize_size
         self.train = False # train
         self.viz = viz
@@ -222,12 +224,13 @@ class eval_MAPData(data.Dataset):
         legend_img = []
         legend_gt = []
 
-        print(jsonData)
+        # print(jsonData)
         for label_dict in jsonData['shapes']:
             if not label_dict['label'].endswith('_poly'):
                 continue
             legend_name.append(label_dict['label'])
             gt_file = gtPath + "_" + label_dict['label'] + ".tif"
+            # print(gt_file)
             gt_im = cv2.imread(gt_file)
             legend_gt.append(gt_im[:,:,0])
             
@@ -334,6 +337,7 @@ class eval_MAPData(data.Dataset):
                 plt.imshow(viz_gt[:,:,0])
                 plt.savefig("eval_viz/"+cur_legend_name+"_gt.png")
             print("final dice:", np.mean(final_dice))
+        return final_dice
 
     def __len__(self):
         return len(self.map_patches) * len(self.legend_name)
