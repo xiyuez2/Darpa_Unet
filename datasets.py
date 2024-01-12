@@ -188,7 +188,7 @@ class eval_MAPData(data.Dataset):
         legend_img: legend image (3,resize_size,resize_size)
         seg_img: segmentation image (3,resize_size,resize_size)
     '''
-    def __init__(self, data_path=training_path,type="poly",range=None,resize_size = 256 , mapName = '', viz = True, edge = False):
+    def __init__(self, data_path=training_path, type="poly", range = None, resize_size = 256, mapName = '', viz = True, edge = False, legend = None):
         self.edge = edge
         self.resize_size = resize_size
         self.train = False # train
@@ -209,7 +209,7 @@ class eval_MAPData(data.Dataset):
         mapPath = os.path.join(data_path, mapName)
         jsonPath = os.path.join(data_path, mapName[0:-4]+'.json')
         gtPath = data_path + "/../validation_rasters/" + mapName[:-4] #_Xjgb_poly.tif
-        
+        print(gtPath)
         self.map = cv2.imread(mapPath)
         if self.viz:
             plt.figure(figsize=(20,20))
@@ -226,7 +226,10 @@ class eval_MAPData(data.Dataset):
 
         # print(jsonData)
         for label_dict in jsonData['shapes']:
+            print(label_dict['label'],legend)
             if not label_dict['label'].endswith('_poly'):
+                continue
+            if not (legend is None) and label_dict['label'] != legend:
                 continue
             legend_name.append(label_dict['label'])
             gt_file = gtPath + "_" + label_dict['label'] + ".tif"
