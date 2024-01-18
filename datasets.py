@@ -15,9 +15,8 @@ from itertools import chain
 from patchify import patchify, unpatchify
 import matplotlib.pyplot as plt
 import math
-
-training_path = "/media/jiahua/FILE/uiuc/NCSA/processed/training"
-validation_path = "/media/jiahua/FILE/uiuc/NCSA/processed/validation"
+import copy
+import flow_transforms
 
 def sincolor(image, position):
     # image is of shape 3 H W
@@ -79,7 +78,7 @@ class MAPData(data.Dataset):
         legend_img: legend image (3,resize_size,resize_size)
         seg_img: segmentation image (3,resize_size,resize_size)
     '''
-    def __init__(self, data_path=training_path,type="poly",range=None,resize_size = 256 , train = True, filp_rate = 0, color_jitter_rate = 0, edge = False):
+    def __init__(self, data_path=None,type="poly",range=None,resize_size = 256 , train = True, filp_rate = 0, color_jitter_rate = 0, edge = False):
         print("augmentation rate:", filp_rate, color_jitter_rate)
         self.edge = edge
         self.resize_size = resize_size
@@ -102,8 +101,8 @@ class MAPData(data.Dataset):
         #                             std=[0.229, 0.224, 0.225]),
         #     ])
         self.mask_transforms = transforms.Compose([
-        transforms.Resize((resize_size, resize_size)),
-        transforms.ToTensor()
+            transforms.Resize((resize_size, resize_size)),
+            transforms.ToTensor()
         ])
         self.root = data_path
         self.type = type
@@ -121,6 +120,16 @@ class MAPData(data.Dataset):
 
     def __getitem__(self, index):
         map_img = Image.open(self.map_path[index])
+        # deep copy map_img to avoid change the original map
+        raw_img = np.array(copy.deepcopy(map_img))
+        super_pixel_img = cv2.bilateralFilter(raw_img, 5, 75, 75)
+        super_pixel_transform = transforms.Compose([
+            flow_transforms.ArrayToTensor(),
+            transforms.Normalize(mean=[0, 0, 0], std=[255, 255, 255]),
+            transforms.Normalize(mean=[0.411, 0.432, 0.45], std=[1, 1, 1])
+        ])
+        super_pixel_img = super_pixel_transform(super_pixel_img)
+
         legend_img = Image.open(self.legend_path[index])
         seg_img = Image.open(self.seg_path[index])
         seg_img = torch.tensor(np.array(seg_img).astype(float))
@@ -170,7 +179,8 @@ class MAPData(data.Dataset):
             # "sup_msk": legend_seg, # 1 H W
             # "cls": 1,
             # 'qry_names': ["datasetid"+str(index)],
-            'qry_ori_size': torch.tensor((256,256))
+            'qry_ori_size': torch.tensor((256,256)),
+            'superpixel': super_pixel_img
         }
     
     def __len__(self):
@@ -188,7 +198,7 @@ class eval_MAPData(data.Dataset):
         legend_img: legend image (3,resize_size,resize_size)
         seg_img: segmentation image (3,resize_size,resize_size)
     '''
-    def __init__(self, data_path=training_path, type="poly", range = None, resize_size = 256, mapName = '', viz = True, edge = False, legend = None):
+    def __init__(self, data_path=None, type="poly", range = None, resize_size = 256, mapName = '', viz = True, edge = False, legend = None):
         self.edge = edge
         self.resize_size = resize_size
         self.train = False # train
@@ -273,6 +283,16 @@ class eval_MAPData(data.Dataset):
         legend_idx = index // len(self.map_patches)
         
         map_img = self.map_patches[patch_idx]
+        # deep copy map_img to avoid change the original map
+        raw_img = copy.deepcopy(map_img)
+        super_pixel_img = cv2.bilateralFilter(raw_img, 5, 75, 75)
+        super_pixel_transform = transforms.Compose([
+            flow_transforms.ArrayToTensor(),
+            transforms.Normalize(mean=[0, 0, 0], std=[255, 255, 255]),
+            transforms.Normalize(mean=[0.411, 0.432, 0.45], std=[1, 1, 1])
+        ])
+        super_pixel_img = super_pixel_transform(super_pixel_img)
+
         legend_img = self.legend_img[legend_idx]
         seg_img = np.zeros((256,256)) #self.legend_gt[patch_idx,legend_idx]
 
@@ -302,7 +322,8 @@ class eval_MAPData(data.Dataset):
             # "sup_msk": legend_seg, # 1 H W
             # "cls": 1,
             'qry_names': ["datasetid"+str(index)],
-            'ori_size': torch.tensor((256,256))
+            'ori_size': torch.tensor((256,256)),
+            'superpixel': super_pixel_img,
         }
     
     def metrics(self,preds):
