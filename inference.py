@@ -64,6 +64,7 @@ def inference(ckpt, map_file, legend, map_data_dir = "/projects/bbym/shared/data
     args.model = model
     args.project = project
     args.name = args.project + "_" + args.model
+    args.superpixel = False
     args.edge = False
 
     pl.seed_everything(args.seed)
@@ -94,4 +95,4 @@ def inference(ckpt, map_file, legend, map_data_dir = "/projects/bbym/shared/data
 
 if __name__ == '__main__':
     # inference(ckpt="./checkpoints/DARPA_Unet_fold02_val/jaccard_index_value=0.9229.ckpt", map_file="CA_AZ_Needles.tif", legend=None, map_data_dir = "/projects/bbym/shared/data/cma/validation/", batch_size = 32, num_workers = 8, seed = 42, model = "Unet", project = "DARPA")
-    inference(ckpt="./checkpoints/DARPA_Unet_fold02_val/jaccard_index_value=0.9229.ckpt", map_file="CA_AZ_Needles.tif", legend="Qayi_poly", map_data_dir = "/projects/bbym/shared/data/cma/validation/", batch_size = 32, num_workers = 8, seed = 42, model = "Unet", project = "DARPA")
+    inference(ckpt="./checkpoints/DARPA_Unet_fold02_val_vanilla/jaccard_index_value=0.9229.ckpt", map_file="CA_AZ_Needles.tif", legend="Qayi_poly", map_data_dir = "/projects/bbym/shared/data/cma/validation/", batch_size = 32, num_workers = 8, seed = 42, model = "Unet", project = "DARPA")
