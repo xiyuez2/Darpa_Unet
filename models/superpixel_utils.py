@@ -198,7 +198,7 @@ def val2uint8(mat,maxVal):
     return (mat_vis * 255. / maxVal).type(torch.uint8)
 
 
-def update_spixl_map (spixl_map_idx_in, assig_map_in):
+def update_spixl_map(spixl_map_idx_in, assig_map_in):
     assig_map = assig_map_in.clone()
 
     b,_,h,w = assig_map.shape

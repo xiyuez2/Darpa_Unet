@@ -36,7 +36,6 @@ parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--num_workers', type=int, default=8)
 
 args = parser.parse_args()
-args = parser.parse_args()
 
 args.name = args.project + "_" + args.model
 # with torch.no_grad():

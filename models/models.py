@@ -19,18 +19,18 @@ class SegmentationModel(pl.LightningModule):
         super().__init__()
         model_name = args.model
         n_channels = 6
-        self.superpixel_weights = '/u/xiyuez2/xiyuez2/Darpa_Unet/models/SpixelNet_bsd_ckpt.tar'
+        self.superpixel_weights = args.superpixel #'/u/xiyuez2/xiyuez2/Darpa_Unet/models/SpixelNet_bsd_ckpt.tar'
         self.superpixel = (len(self.superpixel_weights) > 0)
             
         if args.edge:
             n_channels += 1
         if self.superpixel:
-            n_channels += 3
+            n_channels += 9
             self.superpixel_model = SpixelNet(batchNorm=True)
             # load ckpt to model
             self.superpixel_model.load_state_dict(torch.load(self.superpixel_weights)["state_dict"])
         else:
-            self.superpixel_model
+            self.superpixel_model = None
 
         if model_name == "Unet":
             self.model = UNet(n_channels=n_channels,n_classes=2) # was 6*5 when adding the sin preprocess
@@ -71,10 +71,23 @@ class SegmentationModel(pl.LightningModule):
         if self.superpixel:
             map_img, legend_img, mask, superpixel = train_batch["map_img"],train_batch["legend_img"],train_batch["GT"],train_batch["superpixel"]
             
-            superpixel_img = []
-            for i in range(len(map_img)):
-                superpixel_img.append(super_pixel_inference(downsize = 16, model = self.superpixel_model, img_= map_img[i]))    
-            superpixel_img = torch.from_numpy(np.array(superpixel_img)).cuda()
+            superpixel_img = super_pixel_inference(downsize = 32, model = self.superpixel_model, img_= map_img)
+            # for i in range(len(map_img)):
+            #     superpixel_img.append(super_pixel_inference(downsize = 16, model = self.superpixel_model, img_= map_img[i]))    
+            # visiualize superpixel, plot it and save image on disk
+            # import matplotlib.pyplot as plt
+            # import numpy as np
+            # print("saving image")
+            # viz_superpixel = superpixel_img #.cpu().numpy()
+            # viz_superpixel = viz_superpixel[0,:,:,:]
+            # # normalize superpixel to 0-1
+            # viz_superpixel = (viz_superpixel - viz_superpixel.min()) / (viz_superpixel.max() - viz_superpixel.min())
+            # viz_superpixel = np.transpose(viz_superpixel,(1,2,0))
+            # plt.imshow(viz_superpixel)
+            # plt.savefig("superpixel.png")
+            # plt.close()
+            
+            # superpixel_img = torch.from_numpy(np.array(superpixel_img)).float().cuda()
             map_img = torch.cat((map_img, superpixel_img),axis=1)
 
         else:
@@ -96,13 +109,13 @@ class SegmentationModel(pl.LightningModule):
         if self.superpixel:
             map_img, legend_img, mask, superpixel = val_batch["map_img"],val_batch["legend_img"],val_batch["GT"],val_batch["superpixel"]
             
-            superpixel_img = []
-            for i in range(len(map_img)):
-                superpixel_img.append(super_pixel_inference(downsize = 16, model = self.superpixel_model, img_= map_img[i]))    
-            superpixel_img = torch.from_numpy(np.array(superpixel_img)).cuda()
-            map_img = torch.cat((map_img, superpixel_img),axis=1)
+            superpixel_img = super_pixel_inference(downsize = 32, model = self.superpixel_model, img_= map_img)
+            # for i in range(len(map_img)):
+            #     superpixel_img.append(super_pixel_inference(downsize = 16, model = self.superpixel_model, img_= map_img[i]))    
+            # superpixel_img = torch.from_numpy(np.array(superpixel_img)).float().cuda()
+            map_img = torch.cat((map_img, superpixel_img), axis=1)
         else:
-            map_img, legend_img, mask = val_batch["map_img"],val_batch["legend_img"],val_batch["GT"]
+            map_img, legend_img, mask = val_batch["map_img"], val_batch["legend_img"], val_batch["GT"]
         mask = mask.long()
 
         outputs = self.model(map_img,legend_img)
@@ -117,15 +130,15 @@ class SegmentationModel(pl.LightningModule):
 
     def test_step(self, val_batch, batch_idx):
         if self.superpixel:
-            map_img, legend_img, mask, superpixel = val_batch["map_img"],val_batch["legend_img"],val_batch["GT"],val_batch["superpixel"]
+            map_img, legend_img, mask, superpixel = val_batch["map_img"].cuda(), val_batch["legend_img"].cuda(), val_batch["GT"].cuda(), val_batch["superpixel"].cuda()
             
-            superpixel_img = []
-            for i in range(len(map_img)):
-                superpixel_img.append(super_pixel_inference(downsize = 16, model = self.superpixel_model, img_= map_img[i]))    
-            superpixel_img = torch.from_numpy(np.array(superpixel_img)).cuda()
+            superpixel_img = super_pixel_inference(downsize = 32, model = self.superpixel_model, img_= map_img)
+            # for i in range(len(map_img)):
+            #     superpixel_img.append(super_pixel_inference(downsize = 16, model = self.superpixel_model, img_= map_img[i]))    
+            # superpixel_img = torch.from_numpy(np.array(superpixel_img)).float().cuda()
             map_img = torch.cat((map_img, superpixel_img),axis=1)
         else:
-            map_img, legend_img, mask = val_batch["map_img"],val_batch["legend_img"],val_batch["GT"]
+            map_img, legend_img, mask = val_batch["map_img"].cuda(), val_batch["legend_img"].cuda(), val_batch["GT"].cuda()
         mask = mask.long()
 
         outputs = self.model(map_img,legend_img)
@@ -295,7 +308,29 @@ class UNet(nn.Module):
         self.outc = (OutConv(64, n_classes))
 
     def forward(self, map, legend):
+        
         # print("debug in train",map.size(),legend.size())    
+        # print("debug in train",map.min(),legend.min())
+        # print("debug in train",map.max(),legend.max())
+        # print("debug in train",map.mean(),legend.mean())
+        # # normalize map and legend to 0-1
+        # viz_map = (map - map.min()) / (map.max() - map.min())
+        # viz_legend =  (map - legend.min()) / (legend.max() - legend.min())
+
+        # save map and legend into images on disk
+        # viz_map = viz_map.cpu().numpy()
+        # viz_legend = viz_legend.cpu().numpy()
+        # viz_map = viz_map[0,:,:,:]
+        # viz_legend = viz_legend[0,:,:,:]
+        # viz_map = np.transpose(viz_map,(1,2,0))
+        # viz_legend = np.transpose(viz_legend,(1,2,0))
+        # plt.imshow(viz_map)
+        # plt.savefig("map.png")
+        # plt.close()
+        # plt.imshow(viz_legend)
+        # plt.savefig("legend.png")
+        # plt.close()
+
         x = torch.cat((map, legend),axis=1)
         # print(x.size(),map.size(),legend.size())
         x1 = self.inc(x)
@@ -310,6 +345,8 @@ class UNet(nn.Module):
         logits = self.outc(x)
         # logits = torch.argmax(logits, dim=1)
         # print(logits.size())
+        # viz_logits =  torch.argmax(logits, dim=1).cpu().numpy()
+        # print(viz_logits.shape)
         return logits
 
     def use_checkpointing(self):
@@ -566,7 +603,7 @@ class SpixelNet(nn.Module):
 def super_pixel_inference(downsize, model, img_):
     # may get 4 channel (alpha channel) for some format
     # img is of shape (3, H, W)
-    _, H, W = img_.shape
+    b, _, H, W = img_.shape
     H_, W_  = int(np.ceil(H/16.)*16), int(np.ceil(W/16.)*16)
 
     # get spixel id
@@ -585,17 +622,20 @@ def super_pixel_inference(downsize, model, img_):
     img = img_
     img1 = img_
     ori_img = img_
-    # compute output
-    output = model(img1.unsqueeze(0))
-
-    # assign the spixel map
-    curr_spixl_map = update_spixl_map(spixeIds, output)
-    ori_sz_spixel_map = F.interpolate(curr_spixl_map.type(torch.float), size=( H_,W_), mode='nearest').type(torch.int)
-
-    mean_values = torch.tensor([0.411, 0.432, 0.45], dtype=img1.cuda().unsqueeze(0).dtype).view(3, 1, 1).cuda()
-    # import pdb; pdb.set_trace()
-    spixel_viz, spixel_label_map = get_spixel_image((ori_img + mean_values).clamp(0, 1), ori_sz_spixel_map.squeeze(), n_spixels= n_spixel,  b_enforce_connect=True)
     
+    # compute output
+    output = model(img1)
+
+    spixel_viz = output #np.zeros((len(output), 3, H_, W_))
+    # for i in range(len(output)):
+    # # assign the spixel map
+    #     curr_spixl_map = update_spixl_map(spixeIds, output[i].unsqueeze(0))
+    #     ori_sz_spixel_map = F.interpolate(curr_spixl_map.type(torch.float), size=( H_,W_), mode='nearest').type(torch.int)
+
+    #     mean_values = torch.tensor([0.411, 0.432, 0.45], dtype=img1[i].cuda().unsqueeze(0).dtype).view(3, 1, 1).cuda()
+    #     # import pdb; pdb.set_trace()
+    #     spixel_viz[i], spixel_label_map = get_spixel_image((ori_img[i] + mean_values).clamp(0, 1), ori_sz_spixel_map.squeeze(), n_spixels= n_spixel,  b_enforce_connect=True)
+        
     # plt.imshow(spixel_viz.transpose(1,2,0))
     # plt.savefig("superpixel_img.png")
     # plt.close()

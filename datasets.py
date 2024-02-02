@@ -220,6 +220,7 @@ class eval_MAPData(data.Dataset):
         jsonPath = os.path.join(data_path, mapName[0:-4]+'.json')
         gtPath = data_path + "/../validation_rasters/" + mapName[:-4] #_Xjgb_poly.tif
         print(gtPath)
+        
         self.map = cv2.imread(mapPath)
         if self.viz:
             plt.figure(figsize=(20,20))
@@ -327,7 +328,6 @@ class eval_MAPData(data.Dataset):
         }
     
     def metrics(self,preds):
-        
         preds = preds > 0.5
         shape = np.shape(preds)
         print(shape)

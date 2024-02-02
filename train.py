@@ -48,6 +48,8 @@ parser.add_argument('--scheduler', type=str, default='reducelr')
 parser.add_argument('--filp_rate', type=float, default=0.4)
 parser.add_argument('--color_jitter_rate', type=float, default=0.2)
 parser.add_argument('--edge', type=bool, default=False)
+# parser.add_argument('--superpixel', type=str, default='/u/xiyuez2/xiyuez2/Darpa_Unet/models/SpixelNet_bsd_ckpt.tar')
+parser.add_argument('--superpixel', type=str, default='/u/xiyuez2/xiyuez2/Darpa_Unet/darpa_s32.tar')
 
 args = parser.parse_args()
 args = parser.parse_args()
