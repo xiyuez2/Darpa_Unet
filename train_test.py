@@ -34,6 +34,7 @@ parser.add_argument('--project', type=str, default='DARPA')
 # parser.add_argument('--name', type=str, default='DARPA_Unet')
 parser.add_argument('--model', type=str, default='Unet')
 parser.add_argument('--encoder', type=str, default='None')
+parser.add_argument('--ckpt', type=str, default='./checkpoints/DARPA_Unet_fold02_val_vanilla/jaccard_index_value=0.9284.ckpt')
 
 parser.add_argument('--epochs', type=int, default=500)
 parser.add_argument('--kfold', type=int, default=1)
@@ -50,8 +51,8 @@ parser.add_argument('--scheduler', type=str, default='reducelr')
 parser.add_argument('--filp_rate', type=float, default=0.4)
 parser.add_argument('--color_jitter_rate', type=float, default=0.2)
 parser.add_argument('--edge', type=bool, default=False)
+parser.add_argument('--superpixel', type=str, default='')
 
-args = parser.parse_args()
 args = parser.parse_args()
 
 args.name = args.project + "_" + args.model
@@ -59,7 +60,7 @@ args.name = args.project + "_" + args.model
 if __name__ == '__main__':
     pl.seed_everything(args.seed)
     print("cuda:", torch.cuda.is_available())
-    args.ckpt = None #"./checkpoints/DARPA_Unet_fold02_val/jaccard_index_value=0.9229.ckpt"
+    # args.ckpt = None #"./checkpoints/DARPA_Unet_fold02_val/jaccard_index_value=0.9229.ckpt"
     mapnames = glob.glob(args.map_data_dir + "/*.tif")
     f1_scores = []
     for map_file in mapnames:

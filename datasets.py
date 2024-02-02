@@ -17,6 +17,8 @@ import matplotlib.pyplot as plt
 import math
 import copy
 import flow_transforms
+from h5image.h5image.h5image import H5Image
+
 
 def sincolor(image, position):
     # image is of shape 3 H W
@@ -91,7 +93,7 @@ class MAPData(data.Dataset):
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                 std=[0.229, 0.224, 0.225]),
-        # transforms.ColorJitter(brightness = 0.1, contrast = 0.1, saturation = 0.1, hue=0.5)                        
+        # transforms.ColorJitter(brightness = 0.1, contrast = 0.1, saturation = 0.1, hue=0.5)
         ])
         # else:
         #     self.data_transforms = transforms.Compose([
@@ -328,11 +330,12 @@ class eval_MAPData(data.Dataset):
         }
     
     def metrics(self,preds):
-        preds = preds > 0.5
         shape = np.shape(preds)
-        print(shape)
         preds = preds.reshape(len(self.legend_name),self.patch_shape[0],self.patch_shape[1],1,shape[-1],shape[-1],1)
-        print(np.shape(preds))
+        preds_max = np.array([np.max(preds, axis=0)]*len(self.legend_name)) - 0.00001
+        preds = (preds > preds_max) & (preds_max > 0.5)
+        # preds = preds > 0.5
+
         final_dice = []
         for i in range(len(preds)):
             cur_legend_name = self.legend_name[i]
@@ -345,15 +348,16 @@ class eval_MAPData(data.Dataset):
             cur_masked_img = map_mask(self.map, pad_unpatch_predicted)
 
             intersection = np.logical_and(cur_masked_img.flatten(), cur_gt.flatten()).sum()
-            union = cur_masked_img.sum() + cur_gt.sum() 
+            gtsum = cur_gt.sum() 
+            union = cur_masked_img.sum() + gtsum
             dice = (2.0 * intersection) / union
-            print("dice:", dice)
+            print("dice:", dice, 'intersection:', intersection/gtsum, 'union:', union/gtsum)
             final_dice.append(dice)
-            viz_seg = np.repeat(cur_masked_img[:, :, np.newaxis], 3, axis=2).astype(np.uint8)
-            viz_gt = np.repeat(cur_gt[:, :, np.newaxis], 3, axis=2).astype(np.uint8)
-            cv2.imwrite("eval_viz/"+cur_legend_name+"_pred.tif", viz_seg) 
-            cv2.imwrite("eval_viz/"+cur_legend_name+"_gt.tif", viz_gt) 
             if self.viz:
+                viz_seg = np.repeat(cur_masked_img[:, :, np.newaxis], 3, axis=2).astype(np.uint8)
+                viz_gt = np.repeat(cur_gt[:, :, np.newaxis], 3, axis=2).astype(np.uint8)
+                cv2.imwrite("eval_viz/"+cur_legend_name+"_pred.tif", viz_seg) 
+                cv2.imwrite("eval_viz/"+cur_legend_name+"_gt.tif", viz_gt) 
                 plt.figure(figsize=(20,20))
                 plt.imshow(viz_seg[:,:,0])
                 plt.savefig("eval_viz/"+cur_legend_name+"_pred.png")
@@ -372,7 +376,6 @@ class eval_MAPData(data.Dataset):
         pass
 
 def map_mask(imarray, pad_unpatch_predicted_threshold):
-    
     gray = cv2.cvtColor(imarray, cv2.COLOR_BGR2GRAY)  # greyscale image
     # Detect Background Color
     pix_hist = cv2.calcHist([gray],[0],None,[256],[0,256])
