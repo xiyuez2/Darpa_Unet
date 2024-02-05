@@ -17,5 +17,4 @@
 nvidia-smi
 source ~/.bashrc
 export WANDB_API_KEY=6503c82b63d216d89775a9c56d0a24fb8fd19580
-python train_test.py
-
+python train_test.py --ckpt checkpoints/DARPA_Unet_fold02_val/jaccard_index_value\=0.8261.ckpt

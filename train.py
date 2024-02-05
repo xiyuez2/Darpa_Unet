@@ -27,7 +27,7 @@ parser.add_argument('--map_data_dir', type=str, default='/projects/bbym/shared/d
 
 parser.add_argument('--gpus', type=int, default=1)
 parser.add_argument('--precision', type=int, default=32)
-parser.add_argument('--num_workers', type=int, default=8)
+parser.add_argument('--num_workers', type=int, default=32)
 parser.add_argument('--project', type=str, default='DARPA')
 # parser.add_argument('--name', type=str, default='DARPA_Unet')
 parser.add_argument('--model', type=str, default='Unet')
@@ -49,7 +49,7 @@ parser.add_argument('--filp_rate', type=float, default=0.4)
 parser.add_argument('--color_jitter_rate', type=float, default=0.2)
 parser.add_argument('--edge', type=bool, default=False)
 # parser.add_argument('--superpixel', type=str, default='/u/xiyuez2/xiyuez2/Darpa_Unet/models/SpixelNet_bsd_ckpt.tar')
-parser.add_argument('--superpixel', type=str, default='/u/xiyuez2/xiyuez2/Darpa_Unet/darpa_s32.tar')
+parser.add_argument('--superpixel', type=str, default='')
 
 args = parser.parse_args()
 args = parser.parse_args()

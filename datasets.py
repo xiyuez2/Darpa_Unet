@@ -18,7 +18,42 @@ import math
 import copy
 import flow_transforms
 from h5image.h5image.h5image import H5Image
+import glob
+from random import choice, sample
 
+
+def setup_h5im(train = True):
+    mapsh5i = {}
+    exclude_map = set(['CO_SanchezRes','CA_NV_LasVegas','CO_VailE100K','CA_Cambria','ID_LakeWalcott','AZ_PioRico_Nogales'])
+    map_files = sorted(glob.glob("/projects/bbym/shared/data/commonPatchData/256/15/*.hdf5"))
+    if train:
+        map_files = map_files[0:int(len(map_files)*0.8)]
+    else:
+        map_files = map_files[int(len(map_files)*0.8):]
+    for file in map_files:
+        mapname = os.path.basename(file).replace(".hdf5", "")
+        if mapname not in exclude_map:
+            mapsh5i[mapname] = H5Image(file, "r")
+    print("Setup complete. Number of maps loaded:", len(mapsh5i))
+    return mapsh5i
+
+def generate_map_patches(mapsh5i,percent_valid = 0.75):
+    map_patches = []
+    for map_name in mapsh5i.keys():
+        patches = mapsh5i[map_name].get_patches(map_name) 
+        cor = mapsh5i[map_name].get_map_corners(map_name) 
+
+        valid_patches = [(map_name, layer, x, y) for layer in patches if layer.endswith('_poly') for x, y in patches[layer]]
+        valid_layers = [key for key in patches.keys() if key.endswith('_poly')]
+        random_patches = [(map_name,choice(valid_layers), 
+                        sample(range(cor[0][0], cor[1][0]), 1)[0], 
+                        sample(range(cor[0][1], cor[1][1]), 1)[0]) 
+                        for _ in range(len(valid_patches))]
+
+        n = len(valid_patches)
+        map_patches += sample(valid_patches, int(n * percent_valid)) + sample(random_patches, int(n * (1 - percent_valid)))
+
+    return map_patches
 
 def sincolor(image, position):
     # image is of shape 3 H W
@@ -80,7 +115,7 @@ class MAPData(data.Dataset):
         legend_img: legend image (3,resize_size,resize_size)
         seg_img: segmentation image (3,resize_size,resize_size)
     '''
-    def __init__(self, data_path=None,type="poly",range=None,resize_size = 256 , train = True, filp_rate = 0, color_jitter_rate = 0, edge = False):
+    def __init__(self, data_path=None,type="poly",range=None,resize_size = 256 , train = True, filp_rate = 0, color_jitter_rate = 0, edge = False, update_percent_valid_every = 1):
         print("augmentation rate:", filp_rate, color_jitter_rate)
         self.edge = edge
         self.resize_size = resize_size
@@ -119,9 +154,29 @@ class MAPData(data.Dataset):
         self.legend_path = [os.path.join(self.root,self.type,"legend",x) for x in legend_path]
         self.seg_path = [os.path.join(self.root,self.type,"seg_patches",x) for x in map_path]
         self.pe = positionalencoding1d(4, 256)
+        self.mapsh5i = setup_h5im(train = train)
+        self.patches = generate_map_patches(self.mapsh5i, percent_valid = 1)
+        self.iterations = 0
+        self.percent_valid = 1
+        self.update_percent_valid_every = update_percent_valid_every
+
+    def update_percent_valid(percent_valid = 0.0):
+        assert percent_valid <= 1 and percent_valid >= 0
+        assert self.train
+        self.percent_valid = percent_valid
+        self.patches = generate_map_patches(self.mapsh5i, percent_valid)
 
     def __getitem__(self, index):
-        map_img = Image.open(self.map_path[index])
+        # map_img = Image.open(self.map_path[index])
+        map_name, layer_name, row, column = self.patches[index]
+        map_img = self.mapsh5i[map_name].get_patch(row, column, map_name)
+        legend_img = self.mapsh5i[map_name].get_legend(map_name, layer_name)
+        seg_img = self.mapsh5i[map_name].get_patch(row, column, map_name, layer_name)
+        
+        map_img = Image.fromarray(np.uint8(map_img))
+        legend_img = Image.fromarray(np.uint8(legend_img))
+        seg_img = Image.fromarray(np.uint8(seg_img))
+
         # deep copy map_img to avoid change the original map
         raw_img = np.array(copy.deepcopy(map_img))
         super_pixel_img = cv2.bilateralFilter(raw_img, 5, 75, 75)
@@ -132,8 +187,8 @@ class MAPData(data.Dataset):
         ])
         super_pixel_img = super_pixel_transform(super_pixel_img)
 
-        legend_img = Image.open(self.legend_path[index])
-        seg_img = Image.open(self.seg_path[index])
+        # legend_img = Image.open(self.legend_path[index])
+        # seg_img = Image.open(self.seg_path[index])
         seg_img = torch.tensor(np.array(seg_img).astype(float))
         seg_img = F.interpolate(seg_img.unsqueeze(0).unsqueeze(0), size=(self.resize_size,self.resize_size), mode='bilinear', align_corners=False).squeeze(0)
         seg_img = seg_img > 0.5
@@ -174,6 +229,13 @@ class MAPData(data.Dataset):
             print("debug in data loader")
             print("train:", self.train)
             print(map_img.size(),legend_img.size(),seg_img.size())
+        
+        self.iterations += 1
+        if self.iterations % (len(self.patches) * self.update_percent_valid_every) == 0 and self.train and self.percent_valid > 0.1:
+            percent_valid = self.percent_valid - 0.01
+            print("update percent valid to: ", percent_valid)
+            self.update_percent_valid(percent_valid)
+            
         return {
             "map_img": map_img,    # 3 H W
             "legend_img": legend_img, # 1 3 H W - > 3 H W 
@@ -186,7 +248,7 @@ class MAPData(data.Dataset):
         }
     
     def __len__(self):
-        return len(self.map_path)
+        return len(self.patches)
 
     def sample_tasks(self):
         pass
