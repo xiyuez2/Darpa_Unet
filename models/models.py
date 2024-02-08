@@ -134,8 +134,8 @@ class UNet(nn.Module):
         self.outc = (OutConv(64, n_classes))
 
     def forward(self, map, legend):
+        # print("debugging", map.size(),legend.size())
         x = torch.cat((map, legend),axis=1)
-        # print(x.size(),map.size(),legend.size())
         x1 = self.inc(x)
         x2 = self.down1(x1)
         x3 = self.down2(x2)
@@ -252,11 +252,11 @@ class SegmentationModel(pl.LightningModule):
         super().__init__()
         model_name = args.model
         if model_name == "Unet":
-            self.model = UNet(n_channels=7,n_classes=2) # was 6*5 when adding the sin preprocess
+            self.model = UNet(n_channels=6,n_classes=2) # was 6*5 when adding the sin preprocess
         elif model_name == "Unet2B":
-            self.model = UNet2Branch(n_channels=7,n_classes=2)
+            self.model = UNet2Branch(n_channels=6,n_classes=2)
         elif model_name == "Resnet":
-            self.model = Resnet_Unet(n_channels=7,n_classes=2)
+            self.model = Resnet_Unet(n_channels=6,n_classes=2)
         else:
             raise NotImplementedError
         self.args = args
