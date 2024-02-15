@@ -16,6 +16,8 @@
 
 nvidia-smi
 source ~/.bashrc
-export WANDB_API_KEY=6503c82b63d216d89775a9c56d0a24fb8fd19580
-python train.py
+export WANDB_API_KEY=1bb14ac73c0ae38c88358c9f623950990a3f0668
+python train.py --model spUnet
+
+
 

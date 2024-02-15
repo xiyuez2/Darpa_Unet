@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import math
 import copy
 import flow_transforms
-from h5image.h5image.h5image import H5Image
+# from h5image.h5image.h5image import H5Image
 
 
 def sincolor(image, position):
