@@ -23,14 +23,14 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=42)
 
 # # Xiyue's path to data
-# parser.add_argument('--train_data_dir', type=str, default='/projects/bbym/shared/all_patched_data/training')
-# parser.add_argument('--test_data_dir', type=str, default='/projects/bbym/shared/all_patched_data/validation')
-# parser.add_argument('--map_data_dir', type=str, default='/projects/bbym/shared/data/cma/validation/')
+parser.add_argument('--train_data_dir', type=str, default='/projects/bbym/shared/all_patched_data/training')
+parser.add_argument('--test_data_dir', type=str, default='/projects/bbym/shared/all_patched_data/validation')
+parser.add_argument('--map_data_dir', type=str, default='/projects/bbym/shared/data/cma/validation/')
 
-# Zirui's path to data
-parser.add_argument('--train_data_dir', type=str, default='/home/shared/DARPA/all_patched_data/training')
-parser.add_argument('--test_data_dir', type=str, default='/home/shared/DARPA/all_patched_data/validation')
-parser.add_argument('--map_data_dir', type=str, default='/home/shared/DARPA/data/validation/')
+# HAL path to data
+# parser.add_argument('--train_data_dir', type=str, default='/home/shared/DARPA/all_patched_data/training')
+# parser.add_argument('--test_data_dir', type=str, default='/home/shared/DARPA/all_patched_data/validation')
+# parser.add_argument('--map_data_dir', type=str, default='/home/shared/DARPA/data/validation/')
 
 parser.add_argument('--gpus', type=int, default=1)
 parser.add_argument('--precision', type=int, default=32)
@@ -42,7 +42,7 @@ parser.add_argument('--encoder', type=str, default='None')
 
 parser.add_argument('--epochs', type=int, default=500)
 parser.add_argument('--kfold', type=int, default=1)
-parser.add_argument('--batch_size', type=int, default=16)
+parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--learning_rate', type=float, default=0.0001)
 parser.add_argument('--optimizer', type=str, default='adamp')
 parser.add_argument('--scheduler', type=str, default='reducelr')
@@ -60,7 +60,7 @@ parser.add_argument('--edge', type=bool, default=False)
 
 # parser.add_argument('--superpixel', type=str, default='/u/xiyuez2/xiyuez2/Darpa_Unet/models/SpixelNet_bsd_ckpt.tar')
 # parser.add_argument('--superpixel', type=str, default='/u/xiyuez2/xiyuez2/Darpa_Unet/darpa_s32.tar')
-parser.add_argument('--sp_ckpt', type=str, default='superpixel_ckpt/spixel_sz_2.tar')
+parser.add_argument('--sp_ckpt', type=str, default='superpixel_ckpt/spixel_bsd_sz_2.tar')
 parser.add_argument('--sp_sz', type=int, default=2)
 parser.add_argument('--sp_pretrain', type=bool, default=True)
 
@@ -87,13 +87,8 @@ if __name__ == '__main__':
 
         model = SegmentationModel(args)
 
-        # # Xiyue
-        # train_dataset = MAPData(data_path="/projects/bbym/shared/all_patched_data/training",type="poly",range=(0,30000), filp_rate = args.filp_rate, color_jitter_rate = args.color_jitter_rate)
-        # val_dataset = MAPData(data_path="/projects/bbym/shared/all_patched_data/validation",type="poly",range=(30000,36000),train=False)
-        
-        # Zirui
-        train_dataset = MAPData(data_path="/home/shared/DARPA/all_patched_data/training",type="poly",range=(0,30000), filp_rate = args.filp_rate, color_jitter_rate = args.color_jitter_rate)
-        val_dataset = MAPData(data_path="/home/shared/DARPA/all_patched_data/validation",type="poly",range=(30000,36000),train=False)
+        train_dataset = MAPData(data_path="/projects/bbym/shared/all_patched_data/training",type="poly",range=(0,30000), filp_rate = args.filp_rate, color_jitter_rate = args.color_jitter_rate)
+        val_dataset = MAPData(data_path="/projects/bbym/shared/all_patched_data/validation",type="poly",range=(30000,36000),train=False)
         
         train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
         val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False,num_workers=args.num_workers)
