@@ -21,9 +21,10 @@ class SegmentationModel(pl.LightningModule):
         n_channels = 6
         self.superpixel_weights = args.superpixel #'/u/xiyuez2/xiyuez2/Darpa_Unet/models/SpixelNet_bsd_ckpt.tar'
         self.superpixel = (len(self.superpixel_weights) > 0)
-            
+        self.heatmap = args.heatmap
+
         if args.edge:
-            n_channels += 1
+            n_channels -= 2
         if self.superpixel:
             n_channels += 9
             self.superpixel_model = SpixelNet(batchNorm=True)
@@ -31,6 +32,8 @@ class SegmentationModel(pl.LightningModule):
             self.superpixel_model.load_state_dict(torch.load(self.superpixel_weights)["state_dict"])
         else:
             self.superpixel_model = None
+        if args.heatmap:
+            n_channels += 1
 
         if model_name == "Unet":
             self.model = UNet(n_channels=n_channels,n_classes=2) # was 6*5 when adding the sin preprocess

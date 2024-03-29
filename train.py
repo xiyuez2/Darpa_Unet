@@ -50,10 +50,12 @@ parser.add_argument('--color_jitter_rate', type=float, default=0.2)
 parser.add_argument('--edge', type=bool, default=False)
 # parser.add_argument('--superpixel', type=str, default='/u/xiyuez2/xiyuez2/Darpa_Unet/models/SpixelNet_bsd_ckpt.tar')
 parser.add_argument('--superpixel', type=str, default='')
+parser.add_argument('--heatmap', type=str, default='L2_distance')
+
 
 args = parser.parse_args()
-args = parser.parse_args()
 
+print("heat map:", args.heatmap)
 args.name = args.project + "_" + args.model
 
 if __name__ == '__main__':
@@ -74,8 +76,8 @@ if __name__ == '__main__':
 
         model = SegmentationModel(args)
     
-        train_dataset = MAPData(data_path="/projects/bbym/shared/all_patched_data/training",type="poly",range=(0,30000), filp_rate = args.filp_rate, color_jitter_rate = args.color_jitter_rate)
-        val_dataset = MAPData(data_path="/projects/bbym/shared/all_patched_data/validation",type="poly",range=(30000,36000),train=False)
+        train_dataset = MAPData(data_path="/projects/bbym/shared/all_patched_data/training",type="poly",range=(0,30000), filp_rate = args.filp_rate, color_jitter_rate = args.color_jitter_rate, edge=args.edge,heatmap = args.heatmap)
+        val_dataset = MAPData(data_path="/projects/bbym/shared/all_patched_data/validation",type="poly",range=(30000,36000), edge=args.edge, train=False, heatmap = args.heatmap)
         train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
         val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False,num_workers=args.num_workers)
 
@@ -114,4 +116,3 @@ if __name__ == '__main__':
 
     print(sum(f1_scores) / len(f1_scores))
     print(f1_scores)
-            

@@ -17,10 +17,47 @@ import matplotlib.pyplot as plt
 import math
 import copy
 import flow_transforms
-from h5image.h5image.h5image import H5Image
+from h5image import H5Image
 import glob
 from random import choice, sample
+import scipy
 
+def generate_point(mask):
+    # mask should be of shape h, w
+    # sample a point
+    if np.sum(mask) <= 0:
+        return None
+    
+    while True:
+        point = (np.random.randint(0, mask.shape[0]), np.random.randint(0, mask.shape[1]))
+        
+        if mask[point]:
+            # print(point)
+            return point
+
+def generate_heatmap(mask):
+
+    h,w = mask.shape
+    point = generate_point(mask)
+    if point is None:
+        return np.zeros((h,w))
+    x = np.arange(0, np.max((h,w)))
+    y = np.arange(0, np.max((h,w)))
+    X, Y = np.meshgrid(x, y)
+    Z = ((X - point[1])**2 + (Y - point[0])**2)**0.5
+
+    # Normalize Z to 0 - 1
+    Z = Z / (h**2 + w**2)**0.5
+
+    # # viz mask and Z and save them as png
+    # plt.imshow(mask)
+    # plt.savefig("mask.png")
+    # plt.imshow(Z[:h,:w])
+    # plt.savefig("Z.png")
+    
+    # raise
+
+    return Z[:h,:w]
 
 def setup_h5im(train = True):
     mapsh5i = {}
@@ -36,6 +73,51 @@ def setup_h5im(train = True):
             mapsh5i[mapname] = H5Image(file, "r")
     print("Setup complete. Number of maps loaded:", len(mapsh5i))
     return mapsh5i
+
+
+def unpatch_get_dice(items):
+    print("lauch process")
+    # vars, index = items
+    preds, preds_max, legend_gt, legend_name, cut_shape, map_mask_im, shift_coord, viz, thre = items
+    # thre = thre[index]
+    print("fecthed vars")
+    preds_thre = (preds & (preds_max > thre)).astype(np.int8)
+    # preds = preds > 0.5
+    final_dice = []
+    print("start calcualte dice")
+    
+    for i in range(len(preds)):
+        cur_legend_name = legend_name[i]
+        print("for legend:", cur_legend_name)
+        cur_gt = legend_gt[i]
+
+        unpatch_predicted = unpatchify(preds_thre[i], (cut_shape[0], cut_shape[1], 1))
+        pad_unpatch_predicted = np.pad(unpatch_predicted, [(shift_coord[0], shift_coord[1]), (shift_coord[2], shift_coord[3]), (0,0)], mode='constant')
+        pad_unpatch_predicted = pad_unpatch_predicted.astype(int)
+        
+        # print("debugging", map.shape, pad_unpatch_predicted.shape)
+        cur_masked_img = cv2.bitwise_and(pad_unpatch_predicted, map_mask_im) 
+        # map_mask(map, pad_unpatch_predicted)
+
+        intersection = np.logical_and(cur_masked_img.flatten(), cur_gt.flatten()).sum()
+        gtsum = cur_gt.sum() 
+        union = cur_masked_img.sum() + gtsum
+        dice = (2.0 * intersection) / union
+        print("dice:", dice, 'intersection:', intersection/gtsum, 'union:', union/gtsum)
+        final_dice.append(dice)
+        if viz:
+            viz_seg = np.repeat(cur_masked_img[:, :, np.newaxis], 3, axis=2).astype(np.uint8)
+            viz_gt = np.repeat(cur_gt[:, :, np.newaxis], 3, axis=2).astype(np.uint8)
+            cv2.imwrite("eval_viz/"+cur_legend_name+"_pred.tif", viz_seg) 
+            cv2.imwrite("eval_viz/"+cur_legend_name+"_gt.tif", viz_gt) 
+            plt.figure(figsize=(20,20))
+            plt.imshow(viz_seg[:,:,0])
+            plt.savefig("eval_viz/"+cur_legend_name+"_pred.png")
+            plt.figure(figsize=(20,20))
+            plt.imshow(viz_gt[:,:,0])
+            plt.savefig("eval_viz/"+cur_legend_name+"_gt.png")
+        print("final dice:", np.mean(final_dice))
+    return final_dice
 
 def generate_map_patches(mapsh5i,percent_valid = 0.75):
     map_patches = []
@@ -66,7 +148,6 @@ def canny(image):
     # image is of shape 3 H W
     edges = cv2.Canny(image,100,200)
     return torch.cat([edges,image],dim = 0) # 4 H W
-
 
 def positionalencoding1d(d_model, length):
     """
@@ -115,9 +196,10 @@ class MAPData(data.Dataset):
         legend_img: legend image (3,resize_size,resize_size)
         seg_img: segmentation image (3,resize_size,resize_size)
     '''
-    def __init__(self, data_path=None,type="poly",range=None,resize_size = 256 , train = True, filp_rate = 0, color_jitter_rate = 0, edge = False, update_percent_valid_every = 1):
+    def __init__(self, data_path=None,type="poly",range=None,resize_size = 256 , train = True, filp_rate = 0, color_jitter_rate = 0, edge = False, update_percent_valid_every = 1, heatmap = ''):
         print("augmentation rate:", filp_rate, color_jitter_rate)
-        self.edge = edge
+        self.edge_only = edge
+        self.heatmap = heatmap
         self.resize_size = resize_size
         self.train = train
         self.filp_rate = filp_rate
@@ -155,12 +237,15 @@ class MAPData(data.Dataset):
         self.seg_path = [os.path.join(self.root,self.type,"seg_patches",x) for x in map_path]
         self.pe = positionalencoding1d(4, 256)
         self.mapsh5i = setup_h5im(train = train)
-        self.patches = generate_map_patches(self.mapsh5i, percent_valid = 1)
         self.iterations = 0
         self.percent_valid = 1
         self.update_percent_valid_every = update_percent_valid_every
+        if self.train:
+            self.patches = generate_map_patches(self.mapsh5i, percent_valid = 1)
+        else:
+            self.patches = generate_map_patches(self.mapsh5i, percent_valid = 0.)
 
-    def update_percent_valid(percent_valid = 0.0):
+    def update_percent_valid(self, percent_valid = 0.0):
         assert percent_valid <= 1 and percent_valid >= 0
         assert self.train
         self.percent_valid = percent_valid
@@ -192,11 +277,33 @@ class MAPData(data.Dataset):
         seg_img = torch.tensor(np.array(seg_img).astype(float))
         seg_img = F.interpolate(seg_img.unsqueeze(0).unsqueeze(0), size=(self.resize_size,self.resize_size), mode='bilinear', align_corners=False).squeeze(0)
         seg_img = seg_img > 0.5
-        seg_img = seg_img.type(torch.int64)
+        seg_img = seg_img.type(torch.int32)
         # seg_img = seg_img.type(torch.float)
         # print("debug",np.shape(map_img))
-        edges = cv2.Canny(np.array(map_img),100,200)
-        edges = torch.from_numpy(edges).unsqueeze(0) #  1 256 1256
+        
+        # edges = cv2.Canny(np.array(map_img),100,200)
+        # get 'edge' by conv2d with kernel
+        if self.edge_only:
+            im = np.array(map_img)
+            # cv2.imwrite(str(index)+"_map_patches.png", im)
+            # print("debug for edge:",im.shape) # 256 256 3
+            # pad im with 0
+            # im = np.pad(im, ((1, 1), (1, 1), (0, 0)), mode='constant')
+            # edges = im[1:-1,1:-1] * 8  - im[0:-2, 1:-1] - im[2:, 1:-1] - im[1:-1, 0:-2] - im[1:-1, 2:] - im[0:-2, 0:-2] - im[2:, 2:] - im[0:-2, 2:] - im[2:, 0:-2]
+            kernel = np.array([[ -3-3j, 0-10j,  +3 -3j],
+                   [-10+0j, 0+ 0j, +10 +0j],
+                   [ -3+3j, 0+10j,  +3 +3j]]) 
+            im = np.sum(im, axis = 2)
+            edges = np.zeros_like(im)
+            edges = scipy.signal.convolve2d(im,kernel)
+            edges = np.absolute(edges)
+            
+            # save edges to png for debug
+            # cv2.imwrite(str(index)+"_edges.png", (edges/np.max(edges)*255).astype(np.uint8) )
+            edges = torch.from_numpy(edges[1:-1,1:-1].astype(np.float32)).unsqueeze(0) #  1 256 1256
+            # edges = edges
+        else:
+            edges = None
         
         if self.train and random.random() < self.color_jitter_rate:
             hue_factor = float(torch.empty(1).uniform_(-0.5, 0.5))
@@ -204,11 +311,11 @@ class MAPData(data.Dataset):
             legend_img = aug_f.adjust_hue(legend_img, hue_factor)
 
         map_img = self.data_transforms(map_img)
-        legend_img = self.data_transforms(legend_img)# .unsqueeze(0)
-        if self.edge:
-            map_img = torch.cat([edges,map_img],dim = 0)
+        legend_img = self.data_transforms(legend_img)
 
-
+        if self.edge_only:
+            map_img = edges #torch.cat([edges,map_img],dim = 0)
+            
         if self.train and random.random() < self.filp_rate:
             map_img = torch.flip(map_img, (-1,)) #map_img[:,:,::-1]
             legend_img = torch.flip(legend_img, (-1,)) #legend_img[:,:,::-1]
@@ -235,7 +342,12 @@ class MAPData(data.Dataset):
             percent_valid = self.percent_valid - 0.01
             print("update percent valid to: ", percent_valid)
             self.update_percent_valid(percent_valid)
-            
+        
+        if len(self.heatmap) > 0:
+            # print(seg_img.shape)
+            point_map = seg_img[0].numpy() # H, W
+            heat_map_img = generate_heatmap(point_map)
+            legend_img = torch.cat([torch.tensor(heat_map_img).unsqueeze(0),legend_img],dim = 0).float()
         return {
             "map_img": map_img,    # 3 H W
             "legend_img": legend_img, # 1 3 H W - > 3 H W 
@@ -262,8 +374,8 @@ class eval_MAPData(data.Dataset):
         legend_img: legend image (3,resize_size,resize_size)
         seg_img: segmentation image (3,resize_size,resize_size)
     '''
-    def __init__(self, data_path=None, type="poly", range = None, resize_size = 256, mapName = '', viz = True, edge = False, legend = None):
-        self.edge = edge
+    def __init__(self, data_path=None, type="poly", range = None, resize_size = 256, mapName = '', viz = False, edge = False, legend = None):
+        self.edge_only = edge
         self.resize_size = resize_size
         self.train = False # train
         self.viz = viz
@@ -282,6 +394,7 @@ class eval_MAPData(data.Dataset):
         # read in map data:
         mapPath = os.path.join(data_path, mapName)
         jsonPath = os.path.join(data_path, mapName[0:-4]+'.json')
+        # gtPath = data_path + "" + mapName[:-4] #_Xjgb_poly.tif
         gtPath = data_path + "/../validation_rasters/" + mapName[:-4] #_Xjgb_poly.tif
         print(gtPath)
         
@@ -290,6 +403,7 @@ class eval_MAPData(data.Dataset):
             plt.figure(figsize=(20,20))
             plt.imshow(self.map)
             plt.savefig("eval_viz/"+mapName+"_map.png")
+            plt.close()
         with open(jsonPath, 'r') as f:
             jsonData = json.load(f)
         
@@ -301,17 +415,22 @@ class eval_MAPData(data.Dataset):
 
         # print(jsonData)
         for label_dict in jsonData['shapes']:
-            print(label_dict['label'],legend)
+            
             if not label_dict['label'].endswith('_poly'):
                 continue
             if not (legend is None) and label_dict['label'] != legend:
                 continue
+            print(label_dict['label'],legend)
+            
             legend_name.append(label_dict['label'])
             gt_file = gtPath + "_" + label_dict['label'] + ".tif"
-            # print(gt_file)
+            print(gt_file)
             gt_im = cv2.imread(gt_file)
-            legend_gt.append(gt_im[:,:,0])
-            
+            try:
+                legend_gt.append(gt_im[:,:,0])
+            except:
+                print("No GT found, using all zero")
+                legend_gt.append(np.zeros_like(self.map[:,:,0]))
             point_coord = label_dict['points']
             flatten_list = list(chain.from_iterable(point_coord))
             if point_coord[0][0] >= point_coord[1][0] or point_coord[0][1] >= point_coord[1][1] or (len(flatten_list)!=4):
@@ -330,6 +449,7 @@ class eval_MAPData(data.Dataset):
         self.legend_img = legend_img # [:2]
         self.legend_gt = legend_gt # [:2]
         self.map_patches, self.shift_coord, self.cut_shape,self.patch_shape = cut_map(self.map)
+        self.map_mask_im = map_mask(self.map)
         # print("debug: ", np.shape(legend_gt),np.min(legend_gt),np.max(legend_gt))
 
         # self.w =
@@ -369,8 +489,39 @@ class eval_MAPData(data.Dataset):
 
         # seg_img = (seg_img > 0.0001).type(torch.float)
         # print("debug:", np.shape(map_img),np.shape(legend_img))
+        if self.edge_only:
+            im = np.array(map_img)
+            # cv2.imwrite(str(index)+"_map_patches.png", im)
+            # print("debug for edge:",im.shape) # 256 256 3
+            # pad im with 0
+            # im = np.pad(im, ((1, 1), (1, 1), (0, 0)), mode='constant')
+            # edges = im[1:-1,1:-1] * 8  - im[0:-2, 1:-1] - im[2:, 1:-1] - im[1:-1, 0:-2] - im[1:-1, 2:] - im[0:-2, 0:-2] - im[2:, 2:] - im[0:-2, 2:] - im[2:, 0:-2]
+            kernel = np.array([[ -3-3j, 0-10j,  +3 -3j],
+                   [-10+0j, 0+ 0j, +10 +0j],
+                   [ -3+3j, 0+10j,  +3 +3j]]) 
+            im = np.sum(im, axis = 2)
+            edges = np.zeros_like(im)
+            edges = scipy.signal.convolve2d(im,kernel)
+            edges = np.absolute(edges)
+            
+            # save edges to png for debug
+            # cv2.imwrite(str(index)+"_edges.png", (edges/np.max(edges)*255).astype(np.uint8) )
+            edges = torch.from_numpy(edges[1:-1,1:-1].astype(np.float32)).unsqueeze(0) #  1 256 1256
+            # edges = edges
+        else:
+            edges = None
+
         map_img = self.data_transforms(Image.fromarray(map_img))
         legend_img = self.data_transforms(Image.fromarray(legend_img))# .unsqueeze(0)
+
+        
+        if self.train and random.random() < self.color_jitter_rate:
+            hue_factor = float(torch.empty(1).uniform_(-0.5, 0.5))
+            map_img = aug_f.adjust_hue(map_img, hue_factor)
+            legend_img = aug_f.adjust_hue(legend_img, hue_factor)
+
+        if self.edge_only:
+            map_img = edges 
 
         legend_seg = seg_img.clone()
         legend_seg = legend_seg * 0 + 1
@@ -390,44 +541,32 @@ class eval_MAPData(data.Dataset):
             'ori_size': torch.tensor((256,256)),
             'superpixel': super_pixel_img,
         }
-    
-    def metrics(self,preds):
+
+    def metrics(self,preds,thres = [0.5]):
         shape = np.shape(preds)
         preds = preds.reshape(len(self.legend_name),self.patch_shape[0],self.patch_shape[1],1,shape[-1],shape[-1],1)
         preds_max = np.array([np.max(preds, axis=0)]*len(self.legend_name)) - 0.00001
-        preds = (preds > preds_max) & (preds_max > 0.5)
-        # preds = preds > 0.5
-
-        final_dice = []
-        for i in range(len(preds)):
-            cur_legend_name = self.legend_name[i]
-            print("for legend:", cur_legend_name)
-            cur_gt = self.legend_gt[i]
-
-            unpatch_predicted = unpatchify(preds[i], (self.cut_shape[0], self.cut_shape[1], 1))
-            pad_unpatch_predicted = np.pad(unpatch_predicted, [(self.shift_coord[0], self.shift_coord[1]), (self.shift_coord[2], self.shift_coord[3]), (0,0)], mode='constant')
-            pad_unpatch_predicted = pad_unpatch_predicted.astype(int)
-            cur_masked_img = map_mask(self.map, pad_unpatch_predicted)
-
-            intersection = np.logical_and(cur_masked_img.flatten(), cur_gt.flatten()).sum()
-            gtsum = cur_gt.sum() 
-            union = cur_masked_img.sum() + gtsum
-            dice = (2.0 * intersection) / union
-            print("dice:", dice, 'intersection:', intersection/gtsum, 'union:', union/gtsum)
-            final_dice.append(dice)
-            if self.viz:
-                viz_seg = np.repeat(cur_masked_img[:, :, np.newaxis], 3, axis=2).astype(np.uint8)
-                viz_gt = np.repeat(cur_gt[:, :, np.newaxis], 3, axis=2).astype(np.uint8)
-                cv2.imwrite("eval_viz/"+cur_legend_name+"_pred.tif", viz_seg) 
-                cv2.imwrite("eval_viz/"+cur_legend_name+"_gt.tif", viz_gt) 
-                plt.figure(figsize=(20,20))
-                plt.imshow(viz_seg[:,:,0])
-                plt.savefig("eval_viz/"+cur_legend_name+"_pred.png")
-                plt.figure(figsize=(20,20))
-                plt.imshow(viz_gt[:,:,0])
-                plt.savefig("eval_viz/"+cur_legend_name+"_gt.png")
-            print("final dice:", np.mean(final_dice))
-        return final_dice
+        preds =  preds > preds_max
+        final_dice_thes = []
+        print("done with pre")
+        
+        # from multiprocessing import Pool, Manager
+        # manager = Manager()
+        # shared_list = manager.list([preds, preds_max, self.legend_gt , self.legend_name, self.cut_shape, self.map_mask_im, self.shift_coord, False, thres]) 
+        
+        # print("launching pool")
+        # with Pool(processes=1) as pool:
+        #     p = pool.map(unpatch_get_dice,
+        #                     [ (shared_list, i) for i in range(len(thres))] 
+        #                 )
+        # print(p)
+        final_dice_thes = []
+        for thre in thres:
+            item = (preds, preds_max, self.legend_gt , self.legend_name, self.cut_shape, self.map_mask_im, self.shift_coord, self.viz, thre)
+            curdice = unpatch_get_dice(item)
+            final_dice_thes.append(curdice)
+        print(final_dice_thes)
+        return final_dice_thes
 
     def __len__(self):
         return len(self.map_patches) * len(self.legend_name)
@@ -437,7 +576,7 @@ class eval_MAPData(data.Dataset):
     def reset_sampler(self):
         pass
 
-def map_mask(imarray, pad_unpatch_predicted_threshold):
+def map_mask(imarray):
     gray = cv2.cvtColor(imarray, cv2.COLOR_BGR2GRAY)  # greyscale image
     # Detect Background Color
     pix_hist = cv2.calcHist([gray],[0],None,[256],[0,256])
@@ -463,10 +602,10 @@ def map_mask(imarray, pad_unpatch_predicted_threshold):
     # Keeping only the largest detected contour.
     contour = sorted(contours, key=cv2.contourArea, reverse=True)[0]
 
-    wid, hight = pad_unpatch_predicted_threshold.shape[0], pad_unpatch_predicted_threshold.shape[1]
+    wid, hight = imarray.shape[0], imarray.shape[1]
     mask = np.zeros([wid, hight])
     mask = cv2.fillPoly(mask, pts=[contour], color=(1,1,1)).astype(int)
-    masked_img = cv2.bitwise_and(pad_unpatch_predicted_threshold, mask)
     
-    return masked_img
+    
+    return mask
 

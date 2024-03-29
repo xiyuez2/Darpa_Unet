@@ -51,7 +51,7 @@ def test_map(model, val_loader, args):
     return preds
 
 
-def inference(ckpt, map_file, legend, map_data_dir = "/projects/bbym/shared/data/cma/validation/", batch_size = 32, num_workers = 8, seed = 42, model = "Unet", project = "DARPA"):
+def inference(ckpt, map_file, legend, map_data_dir = "/projects/bbym/shared/data/cma/validation/", batch_size = 32, num_workers = 8, seed = 42, model = "Unet", project = "DARPA", edge = False, viz = False):
     # make args according to input values
     args = parser.parse_args()
     args.ckpt = ckpt
@@ -65,7 +65,7 @@ def inference(ckpt, map_file, legend, map_data_dir = "/projects/bbym/shared/data
     args.project = project
     args.name = args.project + "_" + args.model
     args.superpixel = ""
-    args.edge = False
+    args.edge = edge
 
     pl.seed_everything(args.seed)
     print("cuda:", torch.cuda.is_available())
@@ -80,20 +80,28 @@ def inference(ckpt, map_file, legend, map_data_dir = "/projects/bbym/shared/data
     print("loading model weights file:" + model_weights)
 
     model = SegmentationModel.load_from_checkpoint(checkpoint_path = args.ckpt,args = args)
-    val_dataset = eval_MAPData(data_path=args.map_data_dir,type="poly",range=(30000,36000),mapName = args.map_file, legend = args.legend)
+    val_dataset = eval_MAPData(data_path=args.map_data_dir,type="poly",range=(30000,36000),mapName = args.map_file, legend = args.legend, edge = args.edge, viz = viz)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False,num_workers=args.num_workers)
 
     # pred loop and save res
     preds = test_map(model, val_loader, args)
     preds = np.array(preds)
     # np.save("res",preds)
+    # preds = np.load("res.npy")
+    print(preds.shape)
 
     # cal metrics
-    metrics = val_dataset.metrics(preds)
-    print(metrics)
+    thres = [0.1, 0.15, 0.2, 0.25]
+    # thres = [0.5, 0.7]
+    
+    metrics = val_dataset.metrics(preds, thres = thres)
+    for i in range(len(metrics)):
+        print("threshold: ", thres[i])
+        print(np.median(metrics[i]),np.mean(metrics[i]))
     return metrics
 
 if __name__ == '__main__':
     # inference(ckpt="./checkpoints/DARPA_Unet_fold02_val/jaccard_index_value=0.9229.ckpt", map_file="CA_AZ_Needles.tif", legend=None, map_data_dir = "/projects/bbym/shared/data/cma/validation/", batch_size = 32, num_workers = 8, seed = 42, model = "Unet", project = "DARPA")
-    # inference(ckpt="./checkpoints/DARPA_Unet_fold02_val_vanilla/jaccard_index_value=0.9229.ckpt", map_file="AR_StJoe.tif", legend="Qayi_poly", map_data_dir = "/projects/bbym/shared/data/cma/validation/", batch_size = 32, num_workers = 8, seed = 42, model = "Unet", project = "DARPA")
-    inference(ckpt="./checkpoints/DARPA_Unet_fold02_val_vanilla/jaccard_index_value=0.9284.ckpt", map_file="AR_StJoe.tif", legend=None, map_data_dir = "/projects/bbym/shared/data/cma/validation/", batch_size = 32, num_workers = 8, seed = 42, model = "Unet", project = "DARPA")
+    # inference(ckpt="./checkpoints/DARPA_Unet_fold02_val_vanilla/jaccard_index_value=0.9284.ckpt", map_file="AR_StJoe.tif", legend="Qayi_poly", map_data_dir = "/projects/bbym/shared/data/cma/validation/", batch_size = 32, num_workers = 8, seed = 42, model = "Unet", project = "DARPA")
+    # inference(ckpt="./checkpoints/DARPA_Unet_fold02_val_vanilla/jaccard_index_value=0.9284.ckpt", map_file="OR_JosephineCounty.tif", legend=None, map_data_dir = "/projects/bbym/shared/data/cma/final_evaluation/", batch_size = 32, num_workers = 8, seed = 42, model = "Unet", project = "DARPA")
+    inference(ckpt="./checkpoints/DARPA_Unet_fold02_val/jaccard_index_value=0.4806.ckpt", map_file="USGS_B-961_6.tif", legend=None, map_data_dir = "/projects/bbym/shared/data/cma/validation/", batch_size = 32, num_workers = 8, seed = 42, model = "Unet", project = "DARPA", edge = True, viz = True)

@@ -50,7 +50,7 @@ def test_map(model, val_loader, args):
     return preds
 
 
-def test_main(args):
+def test_main(args, thres = [0.5]):
     pl.seed_everything(args.seed)
     print("cuda:", torch.cuda.is_available())
     # init model and data
@@ -73,7 +73,8 @@ def test_main(args):
     # np.save("res",preds)
     
     # cal metrics
-    metrics = val_dataset.metrics(preds)
+    # thres = [0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7]
+    metrics = val_dataset.metrics(preds,thres=thres)
     print(metrics)
     return metrics
 
