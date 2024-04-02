@@ -243,12 +243,14 @@ class MAPData(data.Dataset):
         if self.train:
             self.patches = generate_map_patches(self.mapsh5i, percent_valid = 1)
         else:
-            self.patches = generate_map_patches(self.mapsh5i, percent_valid = 0.)
+            print("warning set validation set percent_valid to 1.0")
+            self.patches = generate_map_patches(self.mapsh5i, percent_valid = 1.)
 
     def update_percent_valid(self, percent_valid = 0.0):
         assert percent_valid <= 1 and percent_valid >= 0
         assert self.train
-        self.percent_valid = percent_valid
+        print("warning: currently update percent valid is not doing anything, just keep valid percent to 1")
+        self.percent_valid = 1.0 #percent_valid
         self.patches = generate_map_patches(self.mapsh5i, percent_valid)
 
     def __getitem__(self, index):

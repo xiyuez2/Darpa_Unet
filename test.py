@@ -18,26 +18,7 @@ from datasets import MAPData, eval_MAPData
 # from .transforms import make_transform
 from models import SegmentationModel
 
-parser = argparse.ArgumentParser()
-#system setting
-parser.add_argument('--seed', type=int, default=42)
-parser.add_argument('--gpus', type=int, default=1)
-parser.add_argument('--precision', type=int, default=32)
 
-# model setting
-parser.add_argument('--project', type=str, default='DARPA')
-parser.add_argument('--model', type=str, default='Unet')
-parser.add_argument('--ckpt', type=str, default= None) #'./checkpoints/DARPA_Unet_fold02_val/jaccard_index_value=0.9229.ckpt')  #default="jaccard_index_value=0.9229.ckpt"
-
-# dataloader setting
-parser.add_argument('--map_data_dir', type=str, default='/projects/bbym/shared/data/cma/validation/')
-parser.add_argument('--map_file', type=str, default="CA_AZ_Needles.tif")
-parser.add_argument('--batch_size', type=int, default=32)
-parser.add_argument('--num_workers', type=int, default=8)
-
-args = parser.parse_args()
-
-args.name = args.project + "_" + args.model
 # with torch.no_grad():
 def test_map(model, val_loader, args):
     model.eval()
@@ -79,4 +60,24 @@ def test_main(args, thres = [0.5]):
     return metrics
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    #system setting
+    parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--gpus', type=int, default=1)
+    parser.add_argument('--precision', type=int, default=32)
+
+    # model setting
+    parser.add_argument('--project', type=str, default='DARPA')
+    parser.add_argument('--model', type=str, default='Unet')
+    parser.add_argument('--ckpt', type=str, default= None) #'./checkpoints/DARPA_Unet_fold02_val/jaccard_index_value=0.9229.ckpt')  #default="jaccard_index_value=0.9229.ckpt"
+
+    # dataloader setting
+    parser.add_argument('--map_data_dir', type=str, default='/projects/bbym/shared/data/cma/validation/')
+    parser.add_argument('--map_file', type=str, default="CA_AZ_Needles.tif")
+    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--num_workers', type=int, default=8)
+
+    args = parser.parse_args()
+
+    args.name = args.project + "_" + args.model
     test_main(args)

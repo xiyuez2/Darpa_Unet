@@ -18,47 +18,44 @@ from datasets import MAPData
 from models import SegmentationModel
 from test import test_main
 
-parser = argparse.ArgumentParser()
-
-parser.add_argument('--seed', type=int, default=42)
-parser.add_argument('--train_data_dir', type=str, default='/projects/bbym/shared/all_patched_data/training')
-parser.add_argument('--test_data_dir', type=str, default='/projects/bbym/shared/all_patched_data/validation')
-parser.add_argument('--map_data_dir', type=str, default='/projects/bbym/shared/data/cma/validation/')
-
-parser.add_argument('--gpus', type=int, default=1)
-parser.add_argument('--precision', type=int, default=32)
-parser.add_argument('--num_workers', type=int, default=32)
-parser.add_argument('--project', type=str, default='DARPA')
-# parser.add_argument('--name', type=str, default='DARPA_Unet')
-parser.add_argument('--model', type=str, default='Unet')
-parser.add_argument('--encoder', type=str, default='None')
-
-parser.add_argument('--epochs', type=int, default=500)
-parser.add_argument('--kfold', type=int, default=1)
-parser.add_argument('--batch_size', type=int, default=32)
-parser.add_argument('--learning_rate', type=float, default=0.0001)
-parser.add_argument('--optimizer', type=str, default='adamp')
-parser.add_argument('--scheduler', type=str, default='reducelr')
-# parser.add_argument('--loss', type=str, default='ce')
-
-# parser.add_argument('--crop_image_size', type=int, default=512)
-# parser.add_argument('--ShiftScaleRotateMode', type=int, default=4)
-# parser.add_argument('--ShiftScaleRotate', type=float, default=0.2)
-# parser.add_argument('--HorizontalFlip', type=float, default=0.2)
-parser.add_argument('--filp_rate', type=float, default=0.4)
-parser.add_argument('--color_jitter_rate', type=float, default=0.2)
-parser.add_argument('--edge', type=bool, default=False)
-# parser.add_argument('--superpixel', type=str, default='/u/xiyuez2/xiyuez2/Darpa_Unet/models/SpixelNet_bsd_ckpt.tar')
-parser.add_argument('--superpixel', type=str, default='')
-parser.add_argument('--heatmap', type=str, default='L2_distance')
-
-
-args = parser.parse_args()
-
-print("heat map:", args.heatmap)
-args.name = args.project + "_" + args.model
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--train_data_dir', type=str, default='/projects/bbym/shared/all_patched_data/training')
+    parser.add_argument('--test_data_dir', type=str, default='/projects/bbym/shared/all_patched_data/validation')
+    parser.add_argument('--map_data_dir', type=str, default='/projects/bbym/shared/data/cma/validation/')
+
+    parser.add_argument('--gpus', type=int, default=1)
+    parser.add_argument('--precision', type=int, default=32)
+    parser.add_argument('--num_workers', type=int, default=32)
+    parser.add_argument('--project', type=str, default='DARPA')
+    # parser.add_argument('--name', type=str, default='DARPA_Unet')
+    parser.add_argument('--model', type=str, default='Unet')
+    parser.add_argument('--encoder', type=str, default='None')
+
+    parser.add_argument('--epochs', type=int, default=500)
+    parser.add_argument('--kfold', type=int, default=1)
+    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--learning_rate', type=float, default=0.0001)
+    parser.add_argument('--optimizer', type=str, default='adamp')
+    parser.add_argument('--scheduler', type=str, default='reducelr')
+    # parser.add_argument('--loss', type=str, default='ce')
+    # parser.add_argument('--crop_image_size', type=int, default=512)
+    # parser.add_argument('--ShiftScaleRotateMode', type=int, default=4)
+    # parser.add_argument('--ShiftScaleRotate', type=float, default=0.2)
+    # parser.add_argument('--HorizontalFlip', type=float, default=0.2)
+    parser.add_argument('--filp_rate', type=float, default=0.4)
+    parser.add_argument('--color_jitter_rate', type=float, default=0.2)
+    parser.add_argument('--edge', type=bool, default=False)
+    # parser.add_argument('--superpixel', type=str, default='/u/xiyuez2/xiyuez2/Darpa_Unet/models/SpixelNet_bsd_ckpt.tar')
+    parser.add_argument('--superpixel', type=str, default='')
+    parser.add_argument('--heatmap', type=str, default='L2_distance')
+
+    args = parser.parse_args()
+
+    print("heat map:", args.heatmap)
+    args.name = args.project + "_" + args.model
     pl.seed_everything(args.seed)
     print("cuda:", torch.cuda.is_available())
     for idx in [1]:
